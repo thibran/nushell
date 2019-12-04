@@ -60,6 +60,10 @@ pub enum UnspannedAtomicToken<'tokens> {
         spans: (Span, Span),
         nodes: &'tokens Vec<TokenNode>,
     },
+    RoundDelimited {
+        spans: (Span, Span),
+        nodes: &'tokens Vec<TokenNode>,
+    },
     ShorthandFlag {
         name: Span,
     },
@@ -68,6 +72,12 @@ pub enum UnspannedAtomicToken<'tokens> {
     },
     Whitespace {
         text: Span,
+    },
+    Separator {
+        text: Span,
+    },
+    Comment {
+        body: Span,
     },
 }
 
@@ -88,6 +98,8 @@ impl<'tokens> ShellTypeName for UnspannedAtomicToken<'tokens> {
             UnspannedAtomicToken::Operator { .. } => "operator",
             UnspannedAtomicToken::ShorthandFlag { .. } => "shorthand flag",
             UnspannedAtomicToken::Whitespace { .. } => "whitespace",
+            UnspannedAtomicToken::Separator { .. } => "separator",
+            UnspannedAtomicToken::Comment { .. } => "comment",
             UnspannedAtomicToken::Dot { .. } => "dot",
             UnspannedAtomicToken::Number { .. } => "number",
             UnspannedAtomicToken::Size { .. } => "size",
@@ -99,6 +111,7 @@ impl<'tokens> ShellTypeName for UnspannedAtomicToken<'tokens> {
             UnspannedAtomicToken::GlobPattern { .. } => "file pattern",
             UnspannedAtomicToken::Word { .. } => "word",
             UnspannedAtomicToken::SquareDelimited { .. } => "array literal",
+            UnspannedAtomicToken::RoundDelimited { .. } => "paren delimited",
         }
     }
 }
@@ -107,6 +120,12 @@ impl<'tokens> ShellTypeName for UnspannedAtomicToken<'tokens> {
 pub struct AtomicToken<'tokens> {
     pub unspanned: UnspannedAtomicToken<'tokens>,
     pub span: Span,
+}
+
+impl<'tokens> HasSpan for AtomicToken<'tokens> {
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl<'tokens> Deref for AtomicToken<'tokens> {
@@ -131,31 +150,17 @@ impl<'tokens> AtomicToken<'tokens> {
                 ))
             }
             UnspannedAtomicToken::Error { .. } => {
-                return Err(ParseError::mismatch(
-                    expected,
-                    "eof atomic token".spanned(self.span),
-                ))
+                return Err(ParseError::mismatch(expected, "error".spanned(self.span)))
             }
-            UnspannedAtomicToken::Operator { .. } => {
-                return Err(ParseError::mismatch(
-                    expected,
-                    "operator".spanned(self.span),
-                ))
-            }
-            UnspannedAtomicToken::ShorthandFlag { .. } => {
-                return Err(ParseError::mismatch(
-                    expected,
-                    "shorthand flag".spanned(self.span),
-                ))
-            }
-            UnspannedAtomicToken::Whitespace { .. } => {
-                return Err(ParseError::mismatch(
-                    expected,
-                    "whitespace".spanned(self.span),
-                ))
-            }
-            UnspannedAtomicToken::Dot { .. } => {
-                return Err(ParseError::mismatch(expected, "dot".spanned(self.span)))
+            UnspannedAtomicToken::RoundDelimited { .. }
+            | UnspannedAtomicToken::Operator { .. }
+            | UnspannedAtomicToken::ShorthandFlag { .. }
+            | UnspannedAtomicToken::Whitespace { .. }
+            | UnspannedAtomicToken::Separator { .. }
+            | UnspannedAtomicToken::Comment { .. }
+            | UnspannedAtomicToken::Dot { .. }
+            | UnspannedAtomicToken::SquareDelimited { .. } => {
+                return Err(ParseError::mismatch(expected, self.spanned_type_name()));
             }
             UnspannedAtomicToken::Number { number } => {
                 Expression::number(number.to_number(context.source), self.span)
@@ -175,7 +180,6 @@ impl<'tokens> AtomicToken<'tokens> {
                 self.span,
             ),
             UnspannedAtomicToken::Word { text } => Expression::string(*text, *text),
-            UnspannedAtomicToken::SquareDelimited { .. } => unimplemented!("into_hir"),
         })
     }
 
@@ -187,6 +191,8 @@ impl<'tokens> AtomicToken<'tokens> {
             UnspannedAtomicToken::Operator { .. } => "operator",
             UnspannedAtomicToken::ShorthandFlag { .. } => "shorthand flag",
             UnspannedAtomicToken::Whitespace { .. } => "whitespace",
+            UnspannedAtomicToken::Separator { .. } => "separator",
+            UnspannedAtomicToken::Comment { .. } => "comment",
             UnspannedAtomicToken::Dot { .. } => "dot",
             UnspannedAtomicToken::Number { .. } => "number",
             UnspannedAtomicToken::Size { .. } => "size",
@@ -198,6 +204,7 @@ impl<'tokens> AtomicToken<'tokens> {
             UnspannedAtomicToken::GlobPattern { .. } => "file pattern",
             UnspannedAtomicToken::Word { .. } => "word",
             UnspannedAtomicToken::SquareDelimited { .. } => "array literal",
+            UnspannedAtomicToken::RoundDelimited { .. } => "paren delimited",
         }
         .spanned(self.span)
     }
@@ -305,6 +312,11 @@ impl PrettyDebugWithSource for AtomicToken<'_> {
                 b::intersperse_with_source(nodes.iter(), b::space(), source),
                 "]",
             ),
+            UnspannedAtomicToken::RoundDelimited { nodes, .. } => b::delimit(
+                "(",
+                b::intersperse_with_source(nodes.iter(), b::space(), source),
+                ")",
+            ),
             UnspannedAtomicToken::ShorthandFlag { name } => {
                 atom_kind("shorthand flag", b::key(name.slice(source)))
             }
@@ -316,6 +328,13 @@ impl PrettyDebugWithSource for AtomicToken<'_> {
                 "whitespace",
                 b::description(format!("{:?}", text.slice(source))),
             ),
+            UnspannedAtomicToken::Separator { text } => atom_kind(
+                "separator",
+                b::description(format!("{:?}", text.slice(source))),
+            ),
+            UnspannedAtomicToken::Comment { body } => {
+                atom_kind("comment", b::description(body.slice(source)))
+            }
         })
     }
 }
@@ -333,10 +352,12 @@ pub struct ExpansionRule {
     pub(crate) allow_external_word: bool,
     pub(crate) allow_operator: bool,
     pub(crate) allow_eof: bool,
+    pub(crate) allow_separator: bool,
     pub(crate) treat_size_as_word: bool,
     pub(crate) separate_members: bool,
     pub(crate) commit_errors: bool,
     pub(crate) whitespace: WhitespaceHandling,
+    pub(crate) allow_comments: bool,
 }
 
 impl ExpansionRule {
@@ -349,7 +370,9 @@ impl ExpansionRule {
             treat_size_as_word: false,
             separate_members: false,
             commit_errors: false,
+            allow_separator: false,
             whitespace: WhitespaceHandling::RejectWhitespace,
+            allow_comments: false,
         }
     }
 
@@ -365,6 +388,8 @@ impl ExpansionRule {
             separate_members: false,
             treat_size_as_word: false,
             commit_errors: true,
+            allow_separator: true,
+            allow_comments: true,
             whitespace: WhitespaceHandling::AllowWhitespace,
         }
     }
@@ -438,6 +463,30 @@ impl ExpansionRule {
     #[allow(unused)]
     pub fn reject_whitespace(mut self) -> ExpansionRule {
         self.whitespace = WhitespaceHandling::RejectWhitespace;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn allow_separator(mut self) -> ExpansionRule {
+        self.allow_separator = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn reject_separator(mut self) -> ExpansionRule {
+        self.allow_separator = false;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn allow_comments(mut self) -> ExpansionRule {
+        self.allow_comments = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn reject_comments(mut self) -> ExpansionRule {
+        self.allow_comments = false;
         self
     }
 }
@@ -576,6 +625,17 @@ fn expand_atom_inner<'me, 'content>(
                 error: error.clone(),
             }
             .into_atomic_token(error.span));
+        }
+
+        TokenNode::Separator(span) if rule.allow_separator => {
+            peeked.commit();
+            return Ok(UnspannedAtomicToken::Separator { text: *span }.into_atomic_token(span));
+        }
+
+        TokenNode::Comment(comment) if rule.allow_comments => {
+            peeked.commit();
+            return Ok(UnspannedAtomicToken::Comment { body: comment.text }
+                .into_atomic_token(comment.span()));
         }
 
         // [ ... ]

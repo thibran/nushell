@@ -415,7 +415,7 @@ pub fn token_list(input: NomSpan) -> IResult<NomSpan, Spanned<Vec<TokenNode>>> {
     let start = input.offset;
     let (input, first) = node(input)?;
 
-    let (input, mut list) = many0(pair(alt((whitespace, dot)), node))(input)?;
+    let (input, mut list) = many0(node)(input)?;
 
     let end = input.offset;
 
@@ -428,9 +428,9 @@ pub fn token_list(input: NomSpan) -> IResult<NomSpan, Spanned<Vec<TokenNode>>> {
 #[tracable_parser]
 pub fn spaced_token_list(input: NomSpan) -> IResult<NomSpan, Spanned<Vec<TokenNode>>> {
     let start = input.offset;
-    let (input, pre_ws) = opt(whitespace)(input)?;
+    let (input, pre_ws) = many0(any_space)(input)?;
     let (input, items) = token_list(input)?;
-    let (input, post_ws) = opt(whitespace)(input)?;
+    let (input, post_ws) = many0(any_space)(input)?;
     let end = input.offset;
 
     let mut out = vec![];
@@ -444,16 +444,15 @@ pub fn spaced_token_list(input: NomSpan) -> IResult<NomSpan, Spanned<Vec<TokenNo
 
 fn make_token_list(
     first: Vec<TokenNode>,
-    list: Vec<(TokenNode, Vec<TokenNode>)>,
+    list: Vec<Vec<TokenNode>>,
     sp_right: Option<TokenNode>,
 ) -> Vec<TokenNode> {
     let mut nodes = vec![];
 
     nodes.extend(first);
 
-    for (left, right) in list {
-        nodes.push(left);
-        nodes.extend(right);
+    for left in list {
+        nodes.extend(left);
     }
 
     if let Some(sp_right) = sp_right {
@@ -464,12 +463,45 @@ fn make_token_list(
 }
 
 #[tracable_parser]
+pub fn separator(input: NomSpan) -> IResult<NomSpan, TokenNode> {
+    let left = input.offset;
+    let (input, ws1) = alt((tag(";"), tag("\n")))(input)?;
+    let right = input.offset;
+
+    Ok((input, TokenTreeBuilder::spanned_sep(Span::new(left, right))))
+}
+
+#[tracable_parser]
 pub fn whitespace(input: NomSpan) -> IResult<NomSpan, TokenNode> {
     let left = input.offset;
     let (input, ws1) = space1(input)?;
     let right = input.offset;
 
     Ok((input, TokenTreeBuilder::spanned_ws(Span::new(left, right))))
+}
+
+#[tracable_parser]
+pub fn any_space(input: NomSpan) -> IResult<NomSpan, TokenNode> {
+    let left = input.offset;
+    let (input, token) = alt((whitespace, separator, comment))(input)?;
+    let right = input.offset;
+
+    Ok((input, token))
+}
+
+#[tracable_parser]
+pub fn comment(input: NomSpan) -> IResult<NomSpan, TokenNode> {
+    let left = input.offset;
+    let (input, start) = tag("#")(input)?;
+    let (input, rest) = not_line_ending(input)?;
+    let right = input.offset;
+
+    let span = (start.offset + 1, right);
+
+    Ok((
+        input,
+        TokenTreeBuilder::spanned_comment(span, Span::new(left, right)),
+    ))
 }
 
 pub fn delimited(
@@ -593,10 +625,13 @@ pub fn node(input: NomSpan) -> IResult<NomSpan, Vec<TokenNode>> {
         to_list(leaf),
         bare_path,
         pattern_path,
+        to_list(comment),
         to_list(external_word),
         to_list(delimited_paren),
         to_list(delimited_brace),
         to_list(delimited_square),
+        to_list(dot),
+        to_list(any_space),
     ))(input)
 }
 
@@ -646,6 +681,36 @@ pub fn pipeline(input: NomSpan) -> IResult<NomSpan, TokenNode> {
     Ok((
         input,
         TokenTreeBuilder::spanned_pipeline(all_items, Span::new(start, end)),
+    ))
+}
+
+#[tracable_parser]
+pub fn module_node(input: NomSpan) -> IResult<NomSpan, Vec<TokenNode>> {
+    alt((
+        to_list(leaf),
+        bare_path,
+        pattern_path,
+        to_list(external_word),
+        to_list(delimited_paren),
+        to_list(delimited_brace),
+        to_list(delimited_square),
+    ))(input)
+}
+
+#[tracable_parser]
+pub fn module(input: NomSpan) -> IResult<NomSpan, TokenNode> {
+    let (input, tokens) = spaced_token_list(input)?;
+
+    if input.input_len() != 0 {
+        return Err(Err::Error(error_position!(
+            input,
+            nom::error::ErrorKind::Eof
+        )));
+    }
+
+    Ok((
+        input,
+        TokenTreeBuilder::spanned_token_list(tokens.item, tokens.span),
     ))
 }
 
@@ -775,6 +840,7 @@ mod tests {
 
         (<$parser:tt> $source:tt -> $tokens:expr) => {
             let result = apply($parser, stringify!($parser), $source);
+
             let (expected_tree, expected_source) = TokenTreeBuilder::build($tokens);
 
             if result != expected_tree {
@@ -1207,6 +1273,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_signature() {
+        let _ = pretty_env_logger::try_init();
+
+        equal_tokens!(
+            <module>
+            "def cd\n  # Change to a new path.\n  optional directory(Path) # the directory to change to\nend" ->
+            b::token_list(vec![
+                b::bare("def"),
+                b::sp(),
+                b::bare("cd"),
+                b::sep("\n"),
+                b::ws("  "),
+                b::comment(" Change to a new path."),
+                b::sep("\n"),
+                b::ws("  "),
+                b::bare("optional"),
+                b::sp(),
+                b::bare("directory"),
+                b::parens(vec![b::bare("Path")]),
+                b::sp(),
+                b::comment(" the directory to change to"),
+                b::sep("\n"),
+                b::bare("end")
+            ])
+        );
+    }
+
     // #[test]
     // fn test_smoke_pipeline() {
     //     let _ = pretty_env_logger::try_init();
@@ -1279,7 +1373,18 @@ mod tests {
         desc: &str,
         string: &str,
     ) -> TokenNode {
-        f(nom_input(string)).unwrap().1
+        let result = f(nom_input(string));
+
+        match result {
+            Ok(value) => value.1,
+            Err(err) => {
+                let err = nu_errors::ShellError::parse_error(err);
+
+                println!("{:?}", string);
+                crate::hir::baseline_parse::tests::print_err(err, &nu_source::Text::from(string));
+                panic!("test failed")
+            }
+        }
     }
 
     fn span((left, right): (usize, usize)) -> Span {

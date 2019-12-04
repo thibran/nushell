@@ -1,10 +1,10 @@
 use crate::data::base::coerce_compare;
-use crate::data::base::shape::{Column, InlineShape, TypeShape};
+use crate::data::base::shape::{Column, InlineShape};
 use crate::data::primitive::style_primitive;
 use chrono::DateTime;
 use nu_errors::ShellError;
 use nu_parser::Operator;
-use nu_protocol::{Primitive, UntaggedValue};
+use nu_protocol::{ColumnPath, PathMember, Primitive, Type, UntaggedValue, Value};
 use nu_source::{DebugDocBuilder, PrettyDebug, Tagged};
 
 pub fn date_from_str(s: Tagged<&str>) -> Result<UntaggedValue, ShellError> {
@@ -53,7 +53,7 @@ pub fn compare_values(
 }
 
 pub fn format_type<'a>(value: impl Into<&'a UntaggedValue>, width: usize) -> String {
-    TypeShape::from_value(value.into()).colored_string(width)
+    Type::from_value(value.into()).colored_string(width)
 }
 
 pub fn format_leaf<'a>(value: impl Into<&'a UntaggedValue>) -> DebugDocBuilder {

@@ -1,4 +1,5 @@
 use crate::parse::call_node::CallNode;
+use crate::parse::comment::Comment;
 use crate::parse::flag::{Flag, FlagKind};
 use crate::parse::operator::Operator;
 use crate::parse::pipeline::{Pipeline, PipelineElement};
@@ -396,6 +397,36 @@ impl TokenTreeBuilder {
 
     pub fn spanned_ws(span: impl Into<Span>) -> TokenNode {
         TokenNode::Whitespace(span.into())
+    }
+
+    pub fn sep(input: impl Into<String>) -> CurriedToken {
+        let input = input.into();
+
+        Box::new(move |b| {
+            let (start, end) = b.consume(&input);
+            TokenTreeBuilder::spanned_sep(Span::new(start, end))
+        })
+    }
+
+    pub fn spanned_sep(span: impl Into<Span>) -> TokenNode {
+        TokenNode::Separator(span.into())
+    }
+
+    pub fn comment(input: impl Into<String>) -> CurriedToken {
+        let input = input.into();
+
+        Box::new(move |b| {
+            let outer_start = b.pos;
+            b.consume("#");
+            let (start, end) = b.consume(&input);
+            let outer_end = b.pos;
+
+            TokenTreeBuilder::spanned_comment((start, end), (outer_start, outer_end))
+        })
+    }
+
+    pub fn spanned_comment(input: impl Into<Span>, span: impl Into<Span>) -> TokenNode {
+        TokenNode::Comment(Comment::line(input, span))
     }
 
     fn consume(&mut self, input: &str) -> (usize, usize) {

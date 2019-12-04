@@ -15,7 +15,7 @@ use crate::parse_command::{parse_command_tail, CommandTailShape};
 use derive_new::new;
 use getset::Getters;
 use nu_errors::{ParseError, ShellError};
-use nu_protocol::{ShellTypeName, Signature};
+use nu_protocol::{ShellTypeName, Signature, SpannedTypeName};
 use nu_source::{
     b, DebugDocBuilder, HasFallibleSpan, HasSpan, PrettyDebug, PrettyDebugWithSource, Span,
     Spanned, SpannedItem, Tag, TaggedItem, Text,
@@ -183,7 +183,6 @@ pub trait SignatureRegistry {
 pub struct ExpandContext<'context> {
     #[get = "pub(crate)"]
     registry: Box<dyn SignatureRegistry>,
-    #[get = "pub(crate)"]
     source: &'context Text,
     homedir: Option<PathBuf>,
 }
@@ -191,6 +190,10 @@ pub struct ExpandContext<'context> {
 impl<'context> ExpandContext<'context> {
     pub(crate) fn homedir(&self) -> Option<&Path> {
         self.homedir.as_ref().map(|h| h.as_path())
+    }
+
+    pub(crate) fn source(&self) -> &Text {
+        self.source
     }
 }
 

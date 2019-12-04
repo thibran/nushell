@@ -7,7 +7,7 @@ use crate::hir::syntax_shape::{
 use crate::parse::tokens::{RawNumber, UnspannedToken};
 use crate::{hir, hir::Expression, hir::TokensIterator, Operator};
 use nu_errors::ShellError;
-use nu_protocol::{PathMember, ShellTypeName};
+use nu_protocol::{PathMember, ShellTypeName, SpannedTypeName};
 use nu_source::{
     b, DebugDocBuilder, HasSpan, PrettyDebug, PrettyDebugWithSource, Span, Spanned, SpannedItem,
     Tag, Tagged, TaggedItem, Text,

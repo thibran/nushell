@@ -160,7 +160,8 @@ fn paint_flat_shape(flat_shape: &Spanned<FlatShape>, line: &str) -> String {
         FlatShape::ShorthandFlag => Color::Black.bold(),
         FlatShape::Int => Color::Purple.bold(),
         FlatShape::Decimal => Color::Purple.bold(),
-        FlatShape::Whitespace => Color::White.normal(),
+        FlatShape::Whitespace | FlatShape::Separator => Color::White.normal(),
+        FlatShape::Comment => Color::Black.bold(),
         FlatShape::Error => Color::Red.bold(),
         FlatShape::Size { number, unit } => {
             let number = number.slice(line);

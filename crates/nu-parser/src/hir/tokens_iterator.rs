@@ -8,6 +8,7 @@ use crate::TokenNode;
 #[allow(unused)]
 use getset::{Getters, MutGetters};
 use nu_errors::{ParseError, ShellError};
+use nu_protocol::SpannedTypeName;
 use nu_source::{HasFallibleSpan, HasSpan, Span, Spanned, SpannedItem, Tag, Text};
 
 cfg_if::cfg_if! {
@@ -149,7 +150,7 @@ impl<'content, 'me> PeekedNode<'content, 'me> {
 pub fn peek_error(node: &Option<&TokenNode>, eof_span: Span, expected: &'static str) -> ParseError {
     match node {
         None => ParseError::unexpected_eof(expected, eof_span),
-        Some(node) => ParseError::mismatch(expected, node.type_name().spanned(node.span())),
+        Some(node) => ParseError::mismatch(expected, node.spanned_type_name()),
     }
 }
 

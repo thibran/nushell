@@ -27,7 +27,9 @@ pub enum FlatShape {
     Int,
     Decimal,
     Whitespace,
+    Separator,
     Error,
+    Comment,
     Size { number: Span, unit: Span },
 }
 
@@ -92,6 +94,8 @@ impl FlatShape {
                 ..
             }) => shapes.push(FlatShape::ShorthandFlag.spanned(*span)),
             TokenNode::Whitespace(_) => shapes.push(FlatShape::Whitespace.spanned(token.span())),
+            TokenNode::Separator(_) => shapes.push(FlatShape::Separator.spanned(token.span())),
+            TokenNode::Comment(_) => shapes.push(FlatShape::Comment.spanned(token.span())),
             TokenNode::Error(v) => shapes.push(FlatShape::Error.spanned(v.span)),
         }
     }

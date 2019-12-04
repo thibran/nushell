@@ -12,6 +12,7 @@ use crate::{
     parse::token_tree::Delimiter,
 };
 use nu_errors::{ParseError, ShellError};
+use nu_protocol::SpannedTypeName;
 use nu_source::Span;
 #[cfg(not(coloring_in_tokens))]
 use nu_source::Spanned;

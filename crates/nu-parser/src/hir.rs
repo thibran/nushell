@@ -4,6 +4,7 @@ pub(crate) mod expand_external_tokens;
 pub(crate) mod external_command;
 pub(crate) mod named;
 pub(crate) mod path;
+pub(crate) mod signature;
 pub mod syntax_shape;
 pub(crate) mod tokens_iterator;
 
@@ -29,6 +30,33 @@ pub(crate) use self::tokens_iterator::TokensIterator;
 
 pub use self::external_command::ExternalCommand;
 pub use self::named::{NamedArguments, NamedValue};
+
+#[derive(Debug, Clone)]
+pub struct Signature {
+    unspanned: nu_protocol::Signature,
+    span: Span,
+}
+
+impl Signature {
+    pub fn new(unspanned: nu_protocol::Signature, span: impl Into<Span>) -> Signature {
+        Signature {
+            unspanned,
+            span: span.into()
+        }
+    }
+}
+
+impl HasSpan for Signature {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl PrettyDebugWithSource for Signature {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        self.unspanned.pretty_debug(source)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Getters, Serialize, Deserialize, new)]
 pub struct Call {

@@ -14,6 +14,7 @@ documentation = "https://book.nushell.sh"
 [workspace]
 
 members = [
+    "crates/nu-macros",
     "crates/nu-errors",
     "crates/nu-source",
     "crates/nu_plugin_textview",
@@ -36,6 +37,8 @@ nu_plugin_textview = {version = "0.1.0", path = "./crates/nu_plugin_textview", o
 nu_plugin_binaryview = {version = "0.1.0", path = "./crates/nu_plugin_binaryview", optional=true}
 nu_plugin_ps = {version = "0.1.0", path = "./crates/nu_plugin_ps", optional=true}
 nu_plugin_sys = {version = "0.1.0", path = "./crates/nu_plugin_sys", optional=true}
+nu-macros = { version = "0.1.0", path = "./crates/nu-macros" }
+
 
 query_interface = "0.3.5"
 typetag = "0.1.4"

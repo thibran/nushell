@@ -1919,6 +1919,7 @@ dependencies = [
  "nom_locate",
  "nu-build",
  "nu-errors",
+ "nu-macros",
  "nu-parser",
  "nu-protocol",
  "nu-source",
@@ -1996,6 +1997,13 @@ dependencies = [
  "serde_yaml",
  "subprocess",
  "toml 0.5.5",
+]
+
+[[package]]
+name = "nu-macros"
+version = "0.1.0"
+dependencies = [
+ "nu-protocol",
 ]
 
 [[package]]
